@@ -11,12 +11,67 @@ class Mesa {
   static listarTodas() {
     try {
       const db = getDbInstance();
-      const query = db.prepare(`
-        SELECT id, numero, estado, total_actual, abierta_en, cerrada_en
-        FROM mesas
-        ORDER BY numero ASC
-      `);
-      return query.all();
+
+      // Obtener mesas con totales
+      const mesas = db.prepare(`
+        SELECT
+          m.id,
+          m.numero,
+          m.estado,
+          m.abierta_en,
+          m.cerrada_en,
+          COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) as total_actual
+        FROM mesas m
+        LEFT JOIN pedidos p ON m.id = p.mesa_id
+        LEFT JOIN pedido_items pi ON p.id = pi.pedido_id
+        GROUP BY m.id, m.numero, m.estado, m.abierta_en, m.cerrada_en
+        ORDER BY CAST(m.numero AS INTEGER) ASC
+      `).all();
+
+      // Para cada mesa ocupada, obtener resumen de pedidos
+      const mesasConResumen = mesas.map(mesa => {
+        if (mesa.estado === 'ocupada') {
+          // Obtener cantidad de pedidos
+          const totalPedidos = db.prepare(`
+            SELECT COUNT(*) as total
+            FROM pedidos
+            WHERE mesa_id = ?
+          `).get(mesa.id).total;
+
+          // Obtener últimos items pedidos (top 3)
+          const ultimosItems = db.prepare(`
+            SELECT
+              pi.cantidad,
+              prod.nombre as producto_nombre,
+              p.creado_en
+            FROM pedido_items pi
+            INNER JOIN pedidos p ON pi.pedido_id = p.id
+            INNER JOIN productos prod ON pi.producto_id = prod.id
+            WHERE p.mesa_id = ?
+            ORDER BY p.creado_en DESC, pi.id DESC
+            LIMIT 3
+          `).all(mesa.id);
+
+          // Obtener el pedido más reciente
+          const ultimoPedido = db.prepare(`
+            SELECT creado_en
+            FROM pedidos
+            WHERE mesa_id = ?
+            ORDER BY creado_en DESC
+            LIMIT 1
+          `).get(mesa.id);
+
+          return {
+            ...mesa,
+            total_pedidos: totalPedidos,
+            ultimos_items: ultimosItems,
+            ultimo_pedido_en: ultimoPedido?.creado_en || null
+          };
+        }
+        return mesa;
+      });
+
+      return mesasConResumen;
     } catch (error) {
       throw new Error(`Error al listar mesas: ${error.message}`);
     }
@@ -24,22 +79,26 @@ class Mesa {
 
   /**
    * Abre una mesa para comenzar a recibir pedidos
-   * @param {number} numero - Número de la mesa
+   * @param {number} id - ID de la mesa
    * @returns {Object} Mesa actualizada
    */
-  static abrir(numero) {
+  static abrir(id) {
     try {
       const db = getDbInstance();
 
-      // Verificar que la mesa existe y está disponible
-      const mesa = db.prepare('SELECT * FROM mesas WHERE numero = ?').get(numero);
+      // Verificar que la mesa existe y está libre
+      const mesa = db.prepare('SELECT * FROM mesas WHERE id = ?').get(id);
 
       if (!mesa) {
-        throw new Error(`Mesa ${numero} no encontrada`);
+        throw new Error(`Mesa con ID ${id} no encontrada`);
       }
 
       if (mesa.estado === 'ocupada') {
-        throw new Error(`Mesa ${numero} ya está ocupada`);
+        throw new Error(`Mesa ${mesa.numero} ya está ocupada`);
+      }
+
+      if (mesa.estado !== 'libre') {
+        throw new Error(`Mesa ${mesa.numero} no está disponible`);
       }
 
       // Abrir la mesa
@@ -49,13 +108,13 @@ class Mesa {
             abierta_en = CURRENT_TIMESTAMP,
             total_actual = 0.0,
             cerrada_en = NULL
-        WHERE numero = ?
+        WHERE id = ?
       `);
 
-      updateQuery.run(numero);
+      updateQuery.run(id);
 
       // Retornar mesa actualizada
-      return db.prepare('SELECT * FROM mesas WHERE numero = ?').get(numero);
+      return db.prepare('SELECT * FROM mesas WHERE id = ?').get(id);
     } catch (error) {
       throw new Error(`Error al abrir mesa: ${error.message}`);
     }
@@ -87,6 +146,7 @@ class Mesa {
           pi.id as item_id,
           pi.cantidad,
           pi.precio_unitario,
+          pi.notas,
           prod.nombre as producto_nombre,
           prod.categoria as producto_categoria
         FROM pedidos p
@@ -117,6 +177,7 @@ class Mesa {
             id: row.item_id,
             cantidad: row.cantidad,
             precio_unitario: row.precio_unitario,
+            notas: row.notas,
             producto_nombre: row.producto_nombre,
             producto_categoria: row.producto_categoria,
             subtotal: row.cantidad * row.precio_unitario
@@ -152,16 +213,16 @@ class Mesa {
         throw new Error(`Mesa ${mesa.numero} no está ocupada`);
       }
 
-      // Cerrar la mesa
-      const updateQuery = db.prepare(`
+      // NO eliminar pedidos - mantener para historial de ventas
+      // Solo cerrar la mesa y resetear valores
+      db.prepare(`
         UPDATE mesas
-        SET estado = 'disponible',
+        SET estado = 'libre',
             cerrada_en = CURRENT_TIMESTAMP,
-            total_actual = 0.0
+            total_actual = 0.0,
+            abierta_en = NULL
         WHERE id = ?
-      `);
-
-      updateQuery.run(id);
+      `).run(id);
 
       return db.prepare('SELECT * FROM mesas WHERE id = ?').get(id);
     } catch (error) {

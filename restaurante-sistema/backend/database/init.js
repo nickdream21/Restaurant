@@ -67,36 +67,9 @@ function insertSampleData(db) {
   }
   console.log('  → 5 mesas creadas');
 
-  // Insertar 10 productos de ejemplo
-  const insertProducto = db.prepare(`
-    INSERT INTO productos (nombre, precio, categoria, disponible)
-    VALUES (?, ?, ?, ?)
-  `);
-
-  const productos = [
-    // Bebidas
-    ['Agua Mineral', 2.50, 'bebida', 1],
-    ['Refresco', 3.00, 'bebida', 1],
-    ['Cerveza', 4.50, 'bebida', 1],
-
-    // Entradas
-    ['Ensalada César', 8.50, 'entrada', 1],
-    ['Sopa del Día', 6.00, 'entrada', 1],
-
-    // Platos Principales
-    ['Pasta Carbonara', 12.50, 'plato_principal', 1],
-    ['Filete de Res', 18.00, 'plato_principal', 1],
-    ['Pollo a la Parrilla', 14.00, 'plato_principal', 1],
-
-    // Postres
-    ['Tiramisú', 6.50, 'postre', 1],
-    ['Flan Casero', 5.00, 'postre', 1]
-  ];
-
-  for (const producto of productos) {
-    insertProducto.run(...producto);
-  }
-  console.log('  → 10 productos creados (bebidas, entradas, platos principales, postres)');
+  // No insertar productos de ejemplo aquí
+  // Los productos se insertarán con el script productos-reales-variantes.js
+  console.log('  → Productos se deben insertar con productos-reales-variantes.js');
 }
 
 // Ejecutar inicialización si se ejecuta directamente

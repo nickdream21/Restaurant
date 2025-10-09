@@ -1,4 +1,5 @@
 import PropTypes from 'prop-types';
+import { calcularTiempoTranscurrido, formatearHoraPerú } from '../utils/dateUtils';
 
 function TarjetaPedido({ pedido, onCambiarEstado }) {
   const getEstadoConfig = (estado) => {
@@ -15,11 +16,18 @@ function TarjetaPedido({ pedido, onCambiarEstado }) {
           color: 'bg-blue-100 border-blue-500 text-blue-800',
           btnColor: 'bg-green-500 hover:bg-green-600',
           btnText: 'Marcar Listo',
+          nuevoEstado: 'listo'
+        };
+      case 'listo':
+        return {
+          color: 'bg-green-100 border-green-500 text-green-800',
+          btnColor: 'bg-purple-500 hover:bg-purple-600',
+          btnText: 'Marcar Entregado',
           nuevoEstado: 'completado'
         };
       case 'completado':
         return {
-          color: 'bg-green-100 border-green-500 text-green-800',
+          color: 'bg-gray-100 border-gray-500 text-gray-800',
           btnColor: 'bg-gray-400',
           btnText: 'Completado',
           nuevoEstado: null
@@ -35,9 +43,7 @@ function TarjetaPedido({ pedido, onCambiarEstado }) {
   };
 
   const config = getEstadoConfig(pedido.estado);
-  const tiempoTranscurrido = pedido.creado_en
-    ? Math.floor((Date.now() - new Date(pedido.creado_en).getTime()) / 60000)
-    : 0;
+  const tiempo = calcularTiempoTranscurrido(pedido.creado_en);
 
   return (
     <div className={`border-2 rounded-lg shadow-lg p-5 ${config.color} transition-all`}>
@@ -49,7 +55,9 @@ function TarjetaPedido({ pedido, onCambiarEstado }) {
         </div>
         <div className="text-right">
           <span className="text-xs opacity-75">Hace</span>
-          <p className="text-lg font-bold">{tiempoTranscurrido} min</p>
+          <p className={`text-lg font-bold ${tiempo.minutos > 30 ? 'text-red-600' : ''}`}>
+            {tiempo.texto}
+          </p>
         </div>
       </div>
 
@@ -57,16 +65,23 @@ function TarjetaPedido({ pedido, onCambiarEstado }) {
       <div className="bg-white bg-opacity-50 rounded-lg p-3 mb-4 space-y-2">
         {pedido.items && pedido.items.length > 0 ? (
           pedido.items.map((item, idx) => (
-            <div key={idx} className="flex justify-between items-center">
-              <span className="font-semibold">
-                <span className="inline-block w-8 h-8 rounded-full bg-gray-800 text-white text-center leading-8 mr-2">
-                  {item.cantidad}
+            <div key={idx} className="border-b border-gray-300 last:border-b-0 pb-2 last:pb-0">
+              <div className="flex justify-between items-center">
+                <span className="font-semibold">
+                  <span className="inline-block w-8 h-8 rounded-full bg-gray-800 text-white text-center leading-8 mr-2">
+                    {item.cantidad}
+                  </span>
+                  {item.producto_nombre}
                 </span>
-                {item.producto_nombre}
-              </span>
-              <span className="text-sm opacity-75 capitalize">
-                {item.producto_categoria?.replace('_', ' ')}
-              </span>
+                <span className="text-sm opacity-75 capitalize">
+                  {item.producto_categoria?.replace('_', ' ')}
+                </span>
+              </div>
+              {item.notas && (
+                <div className="mt-1 ml-10 text-xs bg-white bg-opacity-70 rounded px-2 py-1">
+                  <span className="font-semibold">📝 Nota:</span> <span className="italic">{item.notas}</span>
+                </div>
+              )}
             </div>
           ))
         ) : (
@@ -92,7 +107,7 @@ function TarjetaPedido({ pedido, onCambiarEstado }) {
 
       {/* Hora de creación */}
       <p className="text-xs opacity-50 mt-2">
-        {new Date(pedido.creado_en).toLocaleTimeString()}
+        Creado: {formatearHoraPerú(pedido.creado_en)}
       </p>
     </div>
   );

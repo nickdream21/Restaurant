@@ -112,6 +112,60 @@ export const cambiarEstadoPedido = async (id, estado) => {
   return response.data;
 };
 
+/**
+ * Cancela un pedido completo (solo si está pendiente)
+ */
+export const cancelarPedido = async (id, motivo = '') => {
+  const response = await api.post(`/pedidos/${id}/cancelar`, { motivo });
+  return response.data;
+};
+
+/**
+ * Elimina un item individual de un pedido
+ */
+export const eliminarItemPedido = async (pedido_id, item_id) => {
+  const response = await api.delete(`/pedidos/${pedido_id}/items/${item_id}`);
+  return response.data;
+};
+
+// ==================== REPORTES ====================
+
+/**
+ * Obtiene ventas del día actual
+ */
+export const getVentasDelDia = async () => {
+  const response = await api.get('/reportes/ventas-del-dia');
+  return response.data;
+};
+
+/**
+ * Obtiene historial de ventas
+ */
+export const getHistorialVentas = async (fecha_inicio, fecha_fin) => {
+  const params = {};
+  if (fecha_inicio) params.fecha_inicio = fecha_inicio;
+  if (fecha_fin) params.fecha_fin = fecha_fin;
+
+  const response = await api.get('/reportes/historial', { params });
+  return response.data;
+};
+
+/**
+ * Obtiene estadísticas generales
+ */
+export const getEstadisticas = async () => {
+  const response = await api.get('/reportes/estadisticas');
+  return response.data;
+};
+
+/**
+ * Obtiene factura de una mesa
+ */
+export const getFactura = async (mesa_id) => {
+  const response = await api.get(`/reportes/factura/${mesa_id}`);
+  return response.data;
+};
+
 // Manejo de errores global
 api.interceptors.response.use(
   (response) => response,

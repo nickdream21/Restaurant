@@ -7,7 +7,7 @@ class Pedido {
   /**
    * Crea un nuevo pedido con sus items
    * @param {number} mesa_id - ID de la mesa
-   * @param {Array} items - Array de items [{producto_id, cantidad}]
+   * @param {Array} items - Array de items [{producto_id, variante_id, cantidad}]
    * @returns {Object} Pedido creado con sus items
    */
   static crear(mesa_id, items) {
@@ -36,8 +36,8 @@ class Pedido {
       `);
 
       const insertItem = db.prepare(`
-        INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio_unitario)
-        VALUES (?, ?, ?, ?)
+        INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio_unitario, notas)
+        VALUES (?, ?, ?, ?, ?)
       `);
 
       const transaction = db.transaction((mesa_id, items) => {
@@ -47,8 +47,16 @@ class Pedido {
 
         // Insertar cada item del pedido
         for (const item of items) {
-          // Obtener precio actual del producto
-          const producto = db.prepare('SELECT precio, disponible FROM productos WHERE id = ?')
+          // Obtener precio de la variante
+          const variante = db.prepare('SELECT precio FROM producto_variantes WHERE id = ?')
+            .get(item.variante_id);
+
+          if (!variante) {
+            throw new Error(`Variante con ID ${item.variante_id} no encontrada`);
+          }
+
+          // Verificar que el producto está disponible
+          const producto = db.prepare('SELECT disponible FROM productos WHERE id = ?')
             .get(item.producto_id);
 
           if (!producto) {
@@ -63,7 +71,13 @@ class Pedido {
             throw new Error('La cantidad debe ser mayor a 0');
           }
 
-          insertItem.run(pedidoId, item.producto_id, item.cantidad, producto.precio);
+          insertItem.run(
+            pedidoId,
+            item.producto_id,
+            item.cantidad,
+            variante.precio,
+            item.notas || ''
+          );
         }
 
         return pedidoId;
@@ -139,6 +153,7 @@ class Pedido {
             pi.id,
             pi.cantidad,
             pi.precio_unitario,
+            pi.notas,
             p.id as producto_id,
             p.nombre as producto_nombre,
             p.categoria as producto_categoria
@@ -172,7 +187,7 @@ class Pedido {
       const db = getDbInstance();
 
       // Validar estado
-      const estadosValidos = ['pendiente', 'en_preparacion', 'completado', 'cancelado'];
+      const estadosValidos = ['pendiente', 'en_preparacion', 'listo', 'completado', 'cancelado'];
       if (!estadosValidos.includes(nuevo_estado)) {
         throw new Error(`Estado inválido. Debe ser: ${estadosValidos.join(', ')}`);
       }
@@ -196,7 +211,15 @@ class Pedido {
 
       updateQuery.run(nuevo_estado, nuevo_estado, id);
 
-      return db.prepare('SELECT * FROM pedidos WHERE id = ?').get(id);
+      // Obtener pedido actualizado con información de la mesa
+      const pedidoActualizado = db.prepare(`
+        SELECT p.*, m.numero as mesa_numero
+        FROM pedidos p
+        JOIN mesas m ON p.mesa_id = m.id
+        WHERE p.id = ?
+      `).get(id);
+
+      return pedidoActualizado;
     } catch (error) {
       throw new Error(`Error al cambiar estado del pedido: ${error.message}`);
     }
@@ -229,6 +252,7 @@ class Pedido {
           pi.id,
           pi.cantidad,
           pi.precio_unitario,
+          pi.notas,
           pi.cantidad * pi.precio_unitario as subtotal,
           p.id as producto_id,
           p.nombre as producto_nombre,

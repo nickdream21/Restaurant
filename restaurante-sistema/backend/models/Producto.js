@@ -11,12 +11,28 @@ class Producto {
   static listarTodos() {
     try {
       const db = getDbInstance();
-      const query = db.prepare(`
-        SELECT id, nombre, precio, categoria, disponible
+      const productos = db.prepare(`
+        SELECT id, nombre, categoria, disponible
         FROM productos
         ORDER BY categoria ASC, nombre ASC
-      `);
-      return query.all();
+      `).all();
+
+      // Para cada producto, obtener sus variantes
+      const productosConVariantes = productos.map(producto => {
+        const variantes = db.prepare(`
+          SELECT id, tamano, precio
+          FROM producto_variantes
+          WHERE producto_id = ?
+          ORDER BY precio ASC
+        `).all(producto.id);
+
+        return {
+          ...producto,
+          variantes
+        };
+      });
+
+      return productosConVariantes;
     } catch (error) {
       throw new Error(`Error al listar productos: ${error.message}`);
     }
