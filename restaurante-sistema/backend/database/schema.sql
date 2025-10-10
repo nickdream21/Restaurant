@@ -40,9 +40,11 @@ CREATE TABLE IF NOT EXISTS pedido_items (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   pedido_id INTEGER NOT NULL,
   producto_id INTEGER NOT NULL,
+  variante_id INTEGER NOT NULL,
   cantidad INTEGER NOT NULL,
   precio_unitario REAL NOT NULL,
   notas TEXT DEFAULT '',
   FOREIGN KEY (pedido_id) REFERENCES pedidos(id) ON DELETE CASCADE,
-  FOREIGN KEY (producto_id) REFERENCES productos(id)
+  FOREIGN KEY (producto_id) REFERENCES productos(id),
+  FOREIGN KEY (variante_id) REFERENCES producto_variantes(id)
 );

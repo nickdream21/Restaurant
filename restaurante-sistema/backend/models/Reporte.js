@@ -91,13 +91,14 @@ class Reporte {
    * Obtiene historial de ventas por rango de fechas
    * @param {string} fechaInicio - Fecha inicio (YYYY-MM-DD)
    * @param {string} fechaFin - Fecha fin (YYYY-MM-DD)
-   * @returns {Array} Historial de ventas
+   * @returns {Object} Historial de ventas con resumen y detalles
    */
   static historialVentas(fechaInicio, fechaFin) {
     try {
       const db = getDbInstance();
 
-      const ventas = db.prepare(`
+      // Ventas agrupadas por fecha
+      const ventasPorFecha = db.prepare(`
         SELECT
           DATE(m.cerrada_en) as fecha,
           COUNT(DISTINCT m.id) as mesas_atendidas,
@@ -112,7 +113,96 @@ class Reporte {
         ORDER BY fecha DESC
       `).all(fechaInicio, fechaFin);
 
-      return ventas;
+      // Resumen del período
+      const resumen = db.prepare(`
+        SELECT
+          COUNT(DISTINCT m.id) as total_mesas,
+          COUNT(DISTINCT p.id) as total_pedidos,
+          COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) as total_ingresos,
+          COALESCE(AVG(pi.cantidad * pi.precio_unitario), 0) as promedio_por_pedido
+        FROM mesas m
+        INNER JOIN pedidos p ON m.id = p.mesa_id
+        INNER JOIN pedido_items pi ON p.id = pi.pedido_id
+        WHERE DATE(m.cerrada_en) BETWEEN ? AND ?
+          AND p.estado = 'completado'
+      `).get(fechaInicio, fechaFin);
+
+      // Productos más vendidos en el período
+      const productosMasVendidos = db.prepare(`
+        SELECT
+          prod.nombre,
+          prod.categoria,
+          SUM(pi.cantidad) as cantidad_vendida,
+          SUM(pi.cantidad * pi.precio_unitario) as total_generado
+        FROM pedido_items pi
+        INNER JOIN productos prod ON pi.producto_id = prod.id
+        INNER JOIN pedidos p ON pi.pedido_id = p.id
+        INNER JOIN mesas m ON p.mesa_id = m.id
+        WHERE DATE(m.cerrada_en) BETWEEN ? AND ?
+          AND p.estado = 'completado'
+        GROUP BY prod.id, prod.nombre, prod.categoria
+        ORDER BY cantidad_vendida DESC
+        LIMIT 10
+      `).all(fechaInicio, fechaFin);
+
+      // Detalles de todas las ventas con sus productos
+      const ventasDetalladas = db.prepare(`
+        SELECT
+          m.id as mesa_id,
+          m.numero as mesa_numero,
+          m.cerrada_en as fecha_cierre,
+          m.abierta_en as fecha_apertura,
+          COUNT(DISTINCT p.id) as total_pedidos,
+          COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) as total_venta
+        FROM mesas m
+        INNER JOIN pedidos p ON m.id = p.mesa_id
+        INNER JOIN pedido_items pi ON p.id = pi.pedido_id
+        WHERE DATE(m.cerrada_en) BETWEEN ? AND ?
+          AND p.estado = 'completado'
+        GROUP BY m.id, m.numero, m.cerrada_en, m.abierta_en
+        ORDER BY m.cerrada_en DESC
+      `).all(fechaInicio, fechaFin);
+
+      // Para cada venta, obtener el detalle de productos
+      const ventasConProductos = ventasDetalladas.map(venta => {
+        const productos = db.prepare(`
+          SELECT
+            prod.nombre as producto,
+            pv.tamano as variante,
+            pi.cantidad,
+            pi.precio_unitario,
+            (pi.cantidad * pi.precio_unitario) as subtotal,
+            pi.notas
+          FROM pedidos p
+          INNER JOIN pedido_items pi ON p.id = pi.pedido_id
+          INNER JOIN productos prod ON pi.producto_id = prod.id
+          LEFT JOIN producto_variantes pv ON pi.variante_id = pv.id
+          WHERE p.mesa_id = ?
+            AND DATE(p.creado_en) BETWEEN ? AND ?
+            AND p.estado = 'completado'
+          ORDER BY prod.nombre, pi.id
+        `).all(venta.mesa_id, fechaInicio, fechaFin);
+
+        return {
+          ...venta,
+          productos
+        };
+      });
+
+      return {
+        ventas_por_fecha: ventasPorFecha,
+        resumen: {
+          total_mesas: resumen.total_mesas || 0,
+          total_pedidos: resumen.total_pedidos || 0,
+          total_ingresos: resumen.total_ingresos || 0,
+          promedio_por_pedido: resumen.promedio_por_pedido || 0,
+          promedio_por_mesa: resumen.total_mesas > 0
+            ? resumen.total_ingresos / resumen.total_mesas
+            : 0
+        },
+        productos_mas_vendidos: productosMasVendidos,
+        ventas_detalladas: ventasConProductos
+      };
     } catch (error) {
       throw new Error(`Error al obtener historial de ventas: ${error.message}`);
     }

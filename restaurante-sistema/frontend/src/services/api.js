@@ -69,10 +69,83 @@ export const getProductos = async () => {
 };
 
 /**
+ * Obtiene un producto por ID
+ */
+export const getProducto = async (id) => {
+  const response = await api.get(`/productos/${id}`);
+  return response.data;
+};
+
+/**
+ * Crea un nuevo producto con sus variantes
+ * @param {Object} producto - {nombre, categoria, variantes: [{tamano, precio}]}
+ */
+export const crearProducto = async (producto) => {
+  const response = await api.post('/productos', producto);
+  return response.data;
+};
+
+/**
+ * Actualiza un producto existente
+ * @param {number} id - ID del producto
+ * @param {Object} datos - {nombre?, categoria?}
+ */
+export const actualizarProducto = async (id, datos) => {
+  const response = await api.put(`/productos/${id}`, datos);
+  return response.data;
+};
+
+/**
+ * Elimina un producto
+ */
+export const eliminarProducto = async (id) => {
+  const response = await api.delete(`/productos/${id}`);
+  return response.data;
+};
+
+/**
+ * Cambia la disponibilidad de un producto
+ */
+export const cambiarDisponibilidadProducto = async (id, disponible) => {
+  const response = await api.patch(`/productos/${id}/disponibilidad`, { disponible });
+  return response.data;
+};
+
+/**
  * Obtiene productos por categoría
  */
 export const getProductosPorCategoria = async (categoria) => {
   const response = await api.get(`/productos/categoria/${categoria}`);
+  return response.data;
+};
+
+// ==================== VARIANTES DE PRODUCTOS ====================
+
+/**
+ * Agrega una variante a un producto
+ * @param {number} productoId - ID del producto
+ * @param {Object} variante - {tamano, precio}
+ */
+export const agregarVariante = async (productoId, variante) => {
+  const response = await api.post(`/productos/${productoId}/variantes`, variante);
+  return response.data;
+};
+
+/**
+ * Actualiza una variante existente
+ * @param {number} varianteId - ID de la variante
+ * @param {Object} datos - {tamano?, precio?}
+ */
+export const actualizarVariante = async (varianteId, datos) => {
+  const response = await api.put(`/productos/variantes/${varianteId}`, datos);
+  return response.data;
+};
+
+/**
+ * Elimina una variante
+ */
+export const eliminarVariante = async (varianteId) => {
+  const response = await api.delete(`/productos/variantes/${varianteId}`);
   return response.data;
 };
 

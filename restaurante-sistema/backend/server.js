@@ -4,15 +4,29 @@ const http = require('http');
 const { Server } = require('socket.io');
 require('dotenv').config();
 
-// Configurar zona horaria de Perú (Sullana, Piura)
-process.env.TZ = 'America/Lima';
+// Configurar zona horaria (por defecto Perú - Sullana, Piura)
+process.env.TZ = process.env.TZ || 'America/Lima';
 
 const app = express();
 const server = http.createServer(app);
+
+// Configurar orígenes permitidos para CORS
+const allowedOrigins = process.env.FRONTEND_URL
+  ? process.env.FRONTEND_URL.split(',').map(url => url.trim())
+  : ['http://localhost:5173'];
+
+// Agregar soporte para red local en desarrollo
+if (process.env.NODE_ENV === 'development') {
+  allowedOrigins.push(/^http:\/\/192\.168\.\d{1,3}\.\d{1,3}:\d+$/);
+  allowedOrigins.push(/^http:\/\/localhost:\d+$/);
+  allowedOrigins.push(/^http:\/\/127\.0\.0\.1:\d+$/);
+}
+
 const io = new Server(server, {
   cors: {
-    origin: '*',
-    methods: ['GET', 'POST']
+    origin: allowedOrigins,
+    methods: ['GET', 'POST'],
+    credentials: true
   }
 });
 
@@ -27,8 +41,33 @@ const productosRoutes = require('./routes/productos');
 const pedidosRoutes = require('./routes/pedidos');
 const reportesRoutes = require('./routes/reportes');
 
-// Middleware
-app.use(cors());
+// Middleware CORS configurado
+app.use(cors({
+  origin: function (origin, callback) {
+    // Permitir peticiones sin origin (como apps móviles o Postman)
+    if (!origin) return callback(null, true);
+
+    // Verificar si el origin está en la lista permitida
+    const isAllowed = allowedOrigins.some(allowed => {
+      if (typeof allowed === 'string') {
+        return allowed === origin;
+      }
+      if (allowed instanceof RegExp) {
+        return allowed.test(origin);
+      }
+      return false;
+    });
+
+    if (isAllowed) {
+      callback(null, true);
+    } else {
+      console.warn(`CORS: Origen no permitido: ${origin}`);
+      callback(new Error('No permitido por CORS'));
+    }
+  },
+  credentials: true
+}));
+
 app.use(express.json());
 
 // Health check endpoint

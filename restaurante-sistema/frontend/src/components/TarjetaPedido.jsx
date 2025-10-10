@@ -72,6 +72,11 @@ function TarjetaPedido({ pedido, onCambiarEstado }) {
                     {item.cantidad}
                   </span>
                   {item.producto_nombre}
+                  {item.variante_tamano && (
+                    <span className="ml-2 text-sm bg-blue-500 text-white px-2 py-1 rounded-full">
+                      {item.variante_tamano}
+                    </span>
+                  )}
                 </span>
                 <span className="text-sm opacity-75 capitalize">
                   {item.producto_categoria?.replace('_', ' ')}

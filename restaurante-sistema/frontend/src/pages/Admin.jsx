@@ -1,5 +1,7 @@
 import { useState, useEffect } from 'react';
 import { getVentasDelDia, getEstadisticas, getHistorialVentas } from '../services/api';
+import GestionProductos from '../components/GestionProductos';
+import ReporteVentas from '../components/ReporteVentas';
 
 function Admin() {
   const [vistaActual, setVistaActual] = useState('dashboard'); // dashboard, ventas, productos, mesas
@@ -255,8 +257,8 @@ function Admin() {
         <div className="flex-1 p-8">
           <div className="max-w-7xl mx-auto">
             {vistaActual === 'dashboard' && <DashboardPrincipal />}
-            {vistaActual === 'ventas' && <div className="bg-white rounded-lg shadow-md p-6"><p className="text-gray-600">Historial de ventas - En construcción</p></div>}
-            {vistaActual === 'productos' && <div className="bg-white rounded-lg shadow-md p-6"><p className="text-gray-600">Gestión de productos - En construcción</p></div>}
+            {vistaActual === 'ventas' && <ReporteVentas />}
+            {vistaActual === 'productos' && <GestionProductos />}
             {vistaActual === 'mesas' && <div className="bg-white rounded-lg shadow-md p-6"><p className="text-gray-600">Gestión de mesas - En construcción</p></div>}
           </div>
         </div>

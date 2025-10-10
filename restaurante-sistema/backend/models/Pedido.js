@@ -36,8 +36,8 @@ class Pedido {
       `);
 
       const insertItem = db.prepare(`
-        INSERT INTO pedido_items (pedido_id, producto_id, cantidad, precio_unitario, notas)
-        VALUES (?, ?, ?, ?, ?)
+        INSERT INTO pedido_items (pedido_id, producto_id, variante_id, cantidad, precio_unitario, notas)
+        VALUES (?, ?, ?, ?, ?, ?)
       `);
 
       const transaction = db.transaction((mesa_id, items) => {
@@ -74,6 +74,7 @@ class Pedido {
           insertItem.run(
             pedidoId,
             item.producto_id,
+            item.variante_id,
             item.cantidad,
             variante.precio,
             item.notas || ''
@@ -156,9 +157,11 @@ class Pedido {
             pi.notas,
             p.id as producto_id,
             p.nombre as producto_nombre,
-            p.categoria as producto_categoria
+            p.categoria as producto_categoria,
+            pv.tamano as variante_tamano
           FROM pedido_items pi
           INNER JOIN productos p ON pi.producto_id = p.id
+          INNER JOIN producto_variantes pv ON pi.variante_id = pv.id
           WHERE pi.pedido_id = ?
           ORDER BY pi.id ASC
         `).all(pedido.id);
@@ -256,9 +259,11 @@ class Pedido {
           pi.cantidad * pi.precio_unitario as subtotal,
           p.id as producto_id,
           p.nombre as producto_nombre,
-          p.categoria as producto_categoria
+          p.categoria as producto_categoria,
+          pv.tamano as variante_tamano
         FROM pedido_items pi
         INNER JOIN productos p ON pi.producto_id = p.id
+        INNER JOIN producto_variantes pv ON pi.variante_id = pv.id
         WHERE pi.pedido_id = ?
         ORDER BY pi.id ASC
       `).all(id);

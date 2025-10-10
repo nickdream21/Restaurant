@@ -41,13 +41,22 @@ router.get('/historial', async (req, res) => {
       fecha_inicio = treintaDiasAtras.toISOString().split('T')[0];
     }
 
+    console.log('📊 Reporte de historial solicitado:', { fecha_inicio, fecha_fin });
+
     const historial = Reporte.historialVentas(fecha_inicio, fecha_fin);
+
+    console.log('📊 Resultado del reporte:', {
+      ventas_por_fecha: historial.ventas_por_fecha?.length || 0,
+      ventas_detalladas: historial.ventas_detalladas?.length || 0,
+      total_ingresos: historial.resumen?.total_ingresos || 0
+    });
+
     res.json({
       success: true,
       data: {
         fecha_inicio,
         fecha_fin,
-        ventas: historial
+        ...historial
       }
     });
   } catch (error) {

@@ -12,7 +12,7 @@ class Mesa {
     try {
       const db = getDbInstance();
 
-      // Obtener mesas con totales
+      // Obtener mesas con totales (solo de la sesión actual)
       const mesas = db.prepare(`
         SELECT
           m.id,
@@ -22,7 +22,7 @@ class Mesa {
           m.cerrada_en,
           COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) as total_actual
         FROM mesas m
-        LEFT JOIN pedidos p ON m.id = p.mesa_id
+        LEFT JOIN pedidos p ON m.id = p.mesa_id AND (m.abierta_en IS NULL OR p.creado_en >= m.abierta_en)
         LEFT JOIN pedido_items pi ON p.id = pi.pedido_id
         GROUP BY m.id, m.numero, m.estado, m.abierta_en, m.cerrada_en
         ORDER BY CAST(m.numero AS INTEGER) ASC
@@ -31,14 +31,15 @@ class Mesa {
       // Para cada mesa ocupada, obtener resumen de pedidos
       const mesasConResumen = mesas.map(mesa => {
         if (mesa.estado === 'ocupada') {
-          // Obtener cantidad de pedidos
+          // Obtener cantidad de pedidos de la sesión actual
           const totalPedidos = db.prepare(`
             SELECT COUNT(*) as total
             FROM pedidos
             WHERE mesa_id = ?
-          `).get(mesa.id).total;
+              AND (? IS NULL OR creado_en >= ?)
+          `).get(mesa.id, mesa.abierta_en, mesa.abierta_en).total;
 
-          // Obtener últimos items pedidos (top 3)
+          // Obtener últimos items pedidos (top 3) de la sesión actual
           const ultimosItems = db.prepare(`
             SELECT
               pi.cantidad,
@@ -48,18 +49,20 @@ class Mesa {
             INNER JOIN pedidos p ON pi.pedido_id = p.id
             INNER JOIN productos prod ON pi.producto_id = prod.id
             WHERE p.mesa_id = ?
+              AND (? IS NULL OR p.creado_en >= ?)
             ORDER BY p.creado_en DESC, pi.id DESC
             LIMIT 3
-          `).all(mesa.id);
+          `).all(mesa.id, mesa.abierta_en, mesa.abierta_en);
 
-          // Obtener el pedido más reciente
+          // Obtener el pedido más reciente de la sesión actual
           const ultimoPedido = db.prepare(`
             SELECT creado_en
             FROM pedidos
             WHERE mesa_id = ?
+              AND (? IS NULL OR creado_en >= ?)
             ORDER BY creado_en DESC
             LIMIT 1
-          `).get(mesa.id);
+          `).get(mesa.id, mesa.abierta_en, mesa.abierta_en);
 
           return {
             ...mesa,
@@ -137,6 +140,7 @@ class Mesa {
       }
 
       // Obtener pedidos de la mesa con sus items
+      // Solo mostrar pedidos de la sesión actual (después de abierta_en si está ocupada)
       const pedidos = db.prepare(`
         SELECT
           p.id,
@@ -153,8 +157,9 @@ class Mesa {
         LEFT JOIN pedido_items pi ON p.id = pi.pedido_id
         LEFT JOIN productos prod ON pi.producto_id = prod.id
         WHERE p.mesa_id = ?
+          AND (? IS NULL OR p.creado_en >= ?)
         ORDER BY p.creado_en DESC, pi.id ASC
-      `).all(id);
+      `).all(id, mesa.abierta_en, mesa.abierta_en);
 
       // Agrupar items por pedido
       const pedidosAgrupados = [];
@@ -239,6 +244,14 @@ class Mesa {
     try {
       const db = getDbInstance();
 
+      // Primero obtener la mesa para saber su fecha de apertura
+      const mesa = db.prepare('SELECT * FROM mesas WHERE id = ?').get(id);
+
+      if (!mesa) {
+        throw new Error(`Mesa con ID ${id} no encontrada`);
+      }
+
+      // Calcular total solo de los pedidos de la sesión actual
       const result = db.prepare(`
         SELECT
           m.id,
@@ -246,11 +259,11 @@ class Mesa {
           m.estado,
           COALESCE(SUM(pi.cantidad * pi.precio_unitario), 0) as total
         FROM mesas m
-        LEFT JOIN pedidos p ON m.id = p.mesa_id
+        LEFT JOIN pedidos p ON m.id = p.mesa_id AND (? IS NULL OR p.creado_en >= ?)
         LEFT JOIN pedido_items pi ON p.id = pi.pedido_id
         WHERE m.id = ?
         GROUP BY m.id, m.numero, m.estado
-      `).get(id);
+      `).get(mesa.abierta_en, mesa.abierta_en, id);
 
       if (!result) {
         throw new Error(`Mesa con ID ${id} no encontrada`);
